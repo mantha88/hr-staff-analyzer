@@ -92,8 +92,8 @@ with col2:
 
 if st.button("분석 실행"):
 
-    prev_raw = pd.read_excel(prev_file)
-    curr_raw = pd.read_excel(curr_file)
+prev_raw = pd.read_excel(prev_file, engine="openpyxl")
+curr_raw = pd.read_excel(curr_file, engine="openpyxl")
 
     prev = build_std(prev_raw)
     curr = build_std(curr_raw)
