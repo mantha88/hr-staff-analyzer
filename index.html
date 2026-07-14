@@ -1,0 +1,422 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>HR Staff Analyzer Web</title>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <style>
+    :root {
+      --bg: #f6f8fb;
+      --card: #ffffff;
+      --text: #172033;
+      --muted: #5c6b82;
+      --line: #dbe3ef;
+      --primary: #2f6fed;
+      --primary-weak: #eaf1ff;
+      --danger: #d64545;
+      --success: #1f8b4c;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans KR", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+    .wrap {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 32px 20px 72px;
+    }
+    h1 { margin: 0 0 10px; font-size: 32px; }
+    .sub { color: var(--muted); margin-bottom: 28px; line-height: 1.6; }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0,1fr));
+      gap: 16px;
+    }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 18px;
+      box-shadow: 0 6px 18px rgba(18, 31, 53, 0.04);
+    }
+    .card h2 { margin: 0 0 10px; font-size: 18px; }
+    .help { color: var(--muted); font-size: 14px; line-height: 1.5; }
+    .uploader {
+      display: block;
+      margin-top: 12px;
+      padding: 18px;
+      border: 2px dashed var(--line);
+      border-radius: 12px;
+      background: #fbfcff;
+    }
+    .toolbar {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin: 20px 0 8px;
+    }
+    button {
+      border: 0;
+      border-radius: 12px;
+      padding: 12px 16px;
+      font-size: 15px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .primary { background: var(--primary); color: white; }
+    .secondary { background: var(--primary-weak); color: var(--primary); }
+    .ghost { background: #eff3f9; color: var(--text); }
+    .note {
+      background: #fff8e8;
+      border: 1px solid #f0d98f;
+      color: #6b550a;
+      border-radius: 12px;
+      padding: 14px 16px;
+      margin: 18px 0;
+      line-height: 1.55;
+    }
+    .status {
+      min-height: 24px;
+      font-size: 14px;
+      color: var(--muted);
+      margin: 12px 0 18px;
+    }
+    .metrics {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0,1fr));
+      gap: 12px;
+      margin-bottom: 18px;
+    }
+    .metric {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 16px;
+    }
+    .metric .label { color: var(--muted); font-size: 13px; }
+    .metric .value { margin-top: 8px; font-size: 28px; font-weight: 800; }
+    .section-title { margin: 28px 0 12px; font-size: 20px; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      overflow: hidden;
+      display: block;
+      overflow-x: auto;
+    }
+    thead tr { background: #f3f6fb; }
+    th, td {
+      padding: 12px 10px;
+      border-bottom: 1px solid var(--line);
+      font-size: 14px;
+      text-align: left;
+      white-space: nowrap;
+    }
+    .hidden { display: none; }
+    .pill {
+      display: inline-block;
+      padding: 4px 8px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 700;
+      background: #eef4ff;
+      color: #2a56b7;
+    }
+    .danger { color: var(--danger); }
+    .success { color: var(--success); }
+    .footer { margin-top: 26px; color: var(--muted); font-size: 13px; line-height: 1.6; }
+    @media (max-width: 900px) {
+      .grid, .metrics { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>HR Staff Analyzer Web</h1>
+    <div class="sub">
+      전월/당월 엑셀 파일을 <b>브라우저 안에서만</b> 읽어 분석합니다. 서버 저장 없이 사용되며, 분석 결과는 현재 브라우저 세션에서만 유지됩니다.
+    </div>
+
+    <div class="note">
+      업로드한 파일은 서버에 저장하지 않습니다. 이 페이지는 <b>정적 HTML</b>로 배포 가능하며, GitHub Pages / Netlify / Vercel 같은 정적 호스팅에 올리면 다른 사람도 링크로 접속할 수 있습니다.
+    </div>
+
+    <div class="grid">
+      <div class="card">
+        <h2>전월 파일</h2>
+        <div class="help">필수 컬럼: 회사, 그룹사번, 분류구분, 부서, 그룹입사일, 이름</div>
+        <label class="uploader">
+          <input id="prevFile" type="file" accept=".xlsx,.xls" />
+        </label>
+        <div id="prevMeta" class="help"></div>
+      </div>
+      <div class="card">
+        <h2>당월 파일</h2>
+        <div class="help">필수 컬럼: 회사, 그룹사번, 분류구분, 부서, 그룹입사일, 이름</div>
+        <label class="uploader">
+          <input id="currFile" type="file" accept=".xlsx,.xls" />
+        </label>
+        <div id="currMeta" class="help"></div>
+      </div>
+    </div>
+
+    <div class="toolbar">
+      <button class="primary" id="analyzeBtn">분석 실행</button>
+      <button class="secondary" id="downloadBtn">결과 엑셀 다운로드</button>
+      <button class="ghost" id="resetBtn">초기화</button>
+    </div>
+
+    <div id="status" class="status">파일을 선택한 뒤 분석 실행을 누르세요.</div>
+
+    <div id="results" class="hidden">
+      <div class="metrics">
+        <div class="metric"><div class="label">당월 총 인원</div><div class="value" id="metricTotal">0</div></div>
+        <div class="metric"><div class="label">입사자</div><div class="value success" id="metricJoiners">0</div></div>
+        <div class="metric"><div class="label">퇴사자</div><div class="value danger" id="metricLeavers">0</div></div>
+        <div class="metric"><div class="label">법인 이동자</div><div class="value" id="metricMoved">0</div></div>
+      </div>
+
+      <h3 class="section-title">당월 법인별 인원 집계</h3>
+      <div id="headcountWrap"></div>
+
+      <h3 class="section-title">입사자</h3>
+      <div id="joinersWrap"></div>
+
+      <h3 class="section-title">퇴사자</h3>
+      <div id="leaversWrap"></div>
+
+      <h3 class="section-title">법인 이동자</h3>
+      <div id="movedWrap"></div>
+    </div>
+
+    <div class="footer">
+      배포 팁: 이 파일 하나만 정적 호스팅에 올리면 됩니다. 별도 Python/Streamlit 서버가 필요 없습니다.
+    </div>
+  </div>
+
+  <script>
+    const AUTO_MAP = {
+      "법인": "회사",
+      "그룹사번": "그룹사번",
+      "고용형태": "분류구분",
+      "부서명": "부서",
+      "입사일": "그룹입사일",
+      "성명": "이름",
+    };
+    const EMP_TYPE_STANDARD = ["월급직", "시급직", "계약직"];
+    let analysisResult = null;
+
+    const els = {
+      prevFile: document.getElementById('prevFile'),
+      currFile: document.getElementById('currFile'),
+      prevMeta: document.getElementById('prevMeta'),
+      currMeta: document.getElementById('currMeta'),
+      status: document.getElementById('status'),
+      results: document.getElementById('results'),
+      metricTotal: document.getElementById('metricTotal'),
+      metricJoiners: document.getElementById('metricJoiners'),
+      metricLeavers: document.getElementById('metricLeavers'),
+      metricMoved: document.getElementById('metricMoved'),
+      headcountWrap: document.getElementById('headcountWrap'),
+      joinersWrap: document.getElementById('joinersWrap'),
+      leaversWrap: document.getElementById('leaversWrap'),
+      movedWrap: document.getElementById('movedWrap'),
+      analyzeBtn: document.getElementById('analyzeBtn'),
+      downloadBtn: document.getElementById('downloadBtn'),
+      resetBtn: document.getElementById('resetBtn'),
+    };
+
+    function setStatus(msg, isError=false) {
+      els.status.textContent = msg;
+      els.status.style.color = isError ? '#d64545' : '#5c6b82';
+    }
+
+    function updateFileMeta(input, targetEl) {
+      const f = input.files?.[0];
+      targetEl.textContent = f ? `${f.name} · ${(f.size/1024).toFixed(1)} KB` : '';
+    }
+
+    els.prevFile.addEventListener('change', () => updateFileMeta(els.prevFile, els.prevMeta));
+    els.currFile.addEventListener('change', () => updateFileMeta(els.currFile, els.currMeta));
+
+    function toYearMonth(x) {
+      if (x === undefined || x === null || x === '') return '';
+      let d;
+      if (typeof x === 'number') {
+        const parsed = XLSX.SSF.parse_date_code(x);
+        if (!parsed) return '';
+        d = new Date(Date.UTC(parsed.y, parsed.m - 1, parsed.d));
+      } else {
+        d = new Date(x);
+      }
+      if (isNaN(d.getTime())) return '';
+      const y = d.getUTCFullYear();
+      const m = String(d.getUTCMonth() + 1).padStart(2, '0');
+      return `${y}-${m}`;
+    }
+
+    function normalizeEmpType(x) {
+      if (x === undefined || x === null) return '';
+      const s = String(x).trim();
+      if (s.includes('월') || s.includes('정규')) return '월급직';
+      if (s.includes('시') || s.includes('파트')) return '시급직';
+      if (s.includes('계약')) return '계약직';
+      return s;
+    }
+
+    function assertColumns(row) {
+      const missing = Object.values(AUTO_MAP).filter(col => !(col in row));
+      if (missing.length) {
+        throw new Error(`필수 컬럼 누락: ${missing.join(', ')}`);
+      }
+    }
+
+    function buildStd(rows) {
+      if (!rows.length) return [];
+      assertColumns(rows[0]);
+      return rows.map(r => ({
+        법인: String(r[AUTO_MAP['법인']] ?? '').trim(),
+        그룹사번: String(r[AUTO_MAP['그룹사번']] ?? '').trim(),
+        성명: String(r[AUTO_MAP['성명']] ?? '').trim(),
+        고용형태: normalizeEmpType(r[AUTO_MAP['고용형태']]),
+        부서명: String(r[AUTO_MAP['부서명']] ?? '').trim(),
+        입사년월: toYearMonth(r[AUTO_MAP['입사일']]),
+      })).filter(r => r.그룹사번);
+    }
+
+    function groupByHeadcount(curr) {
+      const map = new Map();
+      for (const row of curr) {
+        const key = row.법인 || '(공란)';
+        if (!map.has(key)) map.set(key, { 법인: key, 월급직: 0, 시급직: 0, 계약직: 0, 총원: 0 });
+        const obj = map.get(key);
+        if (!obj[row.고용형태]) obj[row.고용형태] = 0;
+        obj[row.고용형태] += 1;
+        obj.총원 += 1;
+      }
+      return Array.from(map.values()).map(r => {
+        EMP_TYPE_STANDARD.forEach(t => { if (!r[t]) r[t] = 0; });
+        return r;
+      }).sort((a,b) => a.법인.localeCompare(b.법인));
+    }
+
+    function indexById(rows) {
+      const m = new Map();
+      rows.forEach(r => m.set(r.그룹사번, r));
+      return m;
+    }
+
+    async function readExcel(file) {
+      const buf = await file.arrayBuffer();
+      const wb = XLSX.read(buf, { type: 'array' });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      return XLSX.utils.sheet_to_json(ws, { defval: '' });
+    }
+
+    function renderTable(target, rows) {
+      if (!rows || rows.length === 0) {
+        target.innerHTML = '<div class="card"><span class="pill">데이터 없음</span></div>';
+        return;
+      }
+      const cols = Object.keys(rows[0]);
+      let html = '<table><thead><tr>' + cols.map(c => `<th>${c}</th>`).join('') + '</tr></thead><tbody>';
+      html += rows.map(r => '<tr>' + cols.map(c => `<td>${String(r[c] ?? '')}</td>`).join('') + '</tr>').join('');
+      html += '</tbody></table>';
+      target.innerHTML = html;
+    }
+
+    function analyze(prev, curr) {
+      const prevIdx = indexById(prev);
+      const currIdx = indexById(curr);
+      const prevIds = new Set(prevIdx.keys());
+      const currIds = new Set(currIdx.keys());
+      const joinIds = [...currIds].filter(id => !prevIds.has(id));
+      const leaveIds = [...prevIds].filter(id => !currIds.has(id));
+      const commonIds = [...currIds].filter(id => prevIds.has(id));
+
+      const joiners = joinIds.map(id => ({ 그룹사번: id, ...currIdx.get(id) }));
+      const leavers = leaveIds.map(id => ({ 그룹사번: id, ...prevIdx.get(id) }));
+      const moved = commonIds
+        .map(id => {
+          const p = prevIdx.get(id);
+          const c = currIdx.get(id);
+          return {
+            그룹사번: id,
+            성명: c.성명,
+            전월_법인: p.법인,
+            당월_법인: c.법인,
+            전월_부서명: p.부서명,
+            당월_부서명: c.부서명,
+            고용형태: c.고용형태,
+          };
+        })
+        .filter(r => r.전월_법인 !== r.당월_법인);
+
+      const headcount = groupByHeadcount(curr);
+      return { headcount, joiners, leavers, moved, total: curr.length };
+    }
+
+    function render(result) {
+      els.results.classList.remove('hidden');
+      els.metricTotal.textContent = result.total;
+      els.metricJoiners.textContent = result.joiners.length;
+      els.metricLeavers.textContent = result.leavers.length;
+      els.metricMoved.textContent = result.moved.length;
+      renderTable(els.headcountWrap, result.headcount);
+      renderTable(els.joinersWrap, result.joiners);
+      renderTable(els.leaversWrap, result.leavers);
+      renderTable(els.movedWrap, result.moved);
+    }
+
+    function exportExcel(result) {
+      if (!result) {
+        setStatus('먼저 분석을 실행해 주세요.', true);
+        return;
+      }
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(result.headcount), '당월집계');
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(result.joiners), '입사자');
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(result.leavers), '퇴사자');
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(result.moved), '법인이동자');
+      XLSX.writeFile(wb, '월말_인원변동_분석결과.xlsx');
+    }
+
+    els.analyzeBtn.addEventListener('click', async () => {
+      try {
+        const prev = els.prevFile.files?.[0];
+        const curr = els.currFile.files?.[0];
+        if (!prev || !curr) throw new Error('전월/당월 파일을 모두 선택해 주세요.');
+        setStatus('엑셀 파일을 브라우저에서 읽는 중입니다...');
+        const [prevRows, currRows] = await Promise.all([readExcel(prev), readExcel(curr)]);
+        setStatus('파일 구조를 검증하고 분석 중입니다...');
+        const prevStd = buildStd(prevRows);
+        const currStd = buildStd(currRows);
+        analysisResult = analyze(prevStd, currStd);
+        render(analysisResult);
+        setStatus(`분석 완료 · 당월 ${analysisResult.total}명 / 입사 ${analysisResult.joiners.length}명 / 퇴사 ${analysisResult.leavers.length}명`);
+      } catch (err) {
+        console.error(err);
+        setStatus(err.message || '분석 중 오류가 발생했습니다.', true);
+      }
+    });
+
+    els.downloadBtn.addEventListener('click', () => exportExcel(analysisResult));
+    els.resetBtn.addEventListener('click', () => {
+      els.prevFile.value = '';
+      els.currFile.value = '';
+      els.prevMeta.textContent = '';
+      els.currMeta.textContent = '';
+      els.results.classList.add('hidden');
+      analysisResult = null;
+      setStatus('초기화되었습니다. 파일을 다시 선택해 주세요.');
+    });
+  </script>
+<script defer src="https://static.cloudflareinsights.com/beacon.min.js/v4513226cdae34746b4dedf0b4dfa099e1781791509496" integrity="sha512-ZE9pZaUXND66v380QUtch/5sE9tPFh2zg45pR2PB0CVkCtOREv2AJKkSidISWkysEuQ0EH8faUU5du78bx87UQ==" data-cf-beacon='{"version":"2024.11.0","token":"4edd5f8ec12a48cfa682ab8261b80a79","server_timing":{"name":{"cfCacheStatus":true,"cfEdge":true,"cfExtPri":true,"cfL4":true,"cfOrigin":true,"cfSpeedBrain":true},"location_startswith":null}}' crossorigin="anonymous"></script>
+</body>
+</html>
